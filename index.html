@@ -42,10 +42,22 @@
 <body>
 <div id="root" data-theme="dark"><div class="app" id="app"></div></div>
 <script>
-// ═══════════ HARDCODED CONFIG — NO META API NEEDED ═══════════
-const BASE1='apppyBXcmAHZsAX49', BASE2='appr2YmdwF9MMzJrH';
-const TBL={members:'tblzt0tmXLtgzArtV',presence:'tbltKnFzngfmcFzV7',badges:'tblBRbezdutWkEiV0',commandes:'tblsNmZgrhvC4a2i9',finances:'tblLtqKKNoQDN30gD'};
-const MAT_TBL={wood:'tblu439pbWlrZOFqD',tools:'tblZszM7mAnYwnOtl',firstaid:'tblfkLwkVAM4AiNHy',food:'tblc5a8LEGIAsLJOK',supplies:'tblqTLCbWhI1SjhYi',bancoffre_loup:'tblHVxbGvHW3iZDih',bancoffre_lynx:'tblBSjkkzam7h7k7a',bancoffre_milan:'tblSd9JiJEgoFQowg',bancoffre_beluga:'tblbeyKvMfv3A2vTV',bancoffre_espadon:'tbldRcDSvwLbCeucE',bancoffre_grizzly:'tblTnCyvBAeuKcxGI'};
+// ═══════════ CONFIG — auto-detected on connect ═══════════
+let BASE1='', BASE2='';
+let TBL={members:'',presence:'',badges:'',commandes:'',finances:'',historique:''};
+let MAT_TBL={wood:'',tools:'',firstaid:'',food:'',supplies:'',bancoffre_loup:'',bancoffre_lynx:'',bancoffre_milan:'',bancoffre_beluga:'',bancoffre_espadon:'',bancoffre_grizzly:''};
+// Table detection signatures (field names that uniquely identify each table)
+const SIGS={
+  members:t=>has(t,'prenom')&&has(t,'nom')&&has(t,'patrouille'),
+  presence:t=>has(t,'membre id')&&has(t,'reunion')&&has(t,'presence'),
+  badges:t=>has(t,'badge')&&has(t,'statut')&&has(t,'categorie')&&has(t,'membre id'),
+  commandes:t=>has(t,'article')&&has(t,'taille')&&has(t,'membre id'),
+  finances:t=>has(t,'type')&&has(t,'montant')&&has(t,'categorie')&&has(t,'date')&&!has(t,'article'),
+  historique:t=>has(t,'membre id')&&has(t,'patrouille')&&has(t,'fonction')&&has(t,'annee scoute')&&!has(t,'promesse')
+};
+const MAT_HINTS={wood:'maitrise',tools:'outils',firstaid:'secours',food:'food',supplies:'intendance',bancoffre_loup:'loup',bancoffre_lynx:'lynx',bancoffre_milan:'milan',bancoffre_beluga:'beluga',bancoffre_espadon:'espadon',bancoffre_grizzly:'grizzly'};
+function has(t,n){return t._fn.includes(n)}
+function scoreBase(info){let s=0;for(const k of['members','presence','badges','commandes','finances'])if(info[k])s++;return s}
 const PATROUILLES=['Loup','Lynx','Milan','Beluga','Espadon','Grizzly'];
 const PAT_C_D={Loup:'#6366f1',Lynx:'#06b6d4',Milan:'#14b8a6',Beluga:'#22c55e',Espadon:'#eab308',Grizzly:'#f97316'};
 const PAT_C_L={Loup:'#2563a8',Lynx:'#1a7a6a',Milan:'#b84c1e',Beluga:'#5b3fa0',Espadon:'#9c6a1a',Grizzly:'#b83030'};
@@ -61,7 +73,7 @@ const ARTICLES=['Short','Chemise','T-shirt blanc','T-shirt navy','Ceinture','Bad
 const ARTICLE_PRICES={'Short':15,'Chemise':15,'T-shirt blanc':5,'T-shirt navy':5,'Ceinture':15,'Badge':1,'Prets / De notre mieux':5};
 
 // ═══════════ STATE ═══════════
-let S={theme:localStorage.getItem('scout_theme')||'dark',token:localStorage.getItem('scout_token')||'',year:localStorage.getItem('scout_year')||'',screen:'setup',loading:false,error:null,statusMsg:null,modal:null,members:[],att:{},reasons:{},meetDate:nxSat(),attFilter:'all',attSearch:'',submitting:false,progress:0,savedStats:{},history:{},loadingHist:false,formFilter:'Tous',formSearch:'',selMember:null,activePillar:null,progressRecs:[],loadingProg:false,savingStep:null,openSec:{},matData:{},matLoading:false,matOpen:{},orders:[],ordersLoading:false,oMember:null,oArticle:'',oTaille:'',oQty:1,oBadge:'',oNotes:'',oPrix:'',oSaving:false,finTx:[],finLoading:false,finSaving:false};
+let S={theme:localStorage.getItem('scout_theme')||'dark',token:localStorage.getItem('scout_token')||'',year:localStorage.getItem('scout_year')||'',screen:'setup',loading:false,error:null,statusMsg:null,modal:null,members:[],att:{},reasons:{},meetDate:nxSat(),attFilter:'all',attSearch:'',submitting:false,progress:0,savedStats:{},history:{},loadingHist:false,formFilter:'Tous',formSearch:'',selMember:null,activePillar:null,progressRecs:[],loadingProg:false,savingStep:null,openSec:{},matData:{},matLoading:false,matOpen:{},orders:[],ordersLoading:false,oMember:null,oArticle:'',oTaille:'',oQty:1,oBadge:'',oNotes:'',oPrix:'',oSaving:false,finTx:[],finLoading:false,finSaving:false,dashLoading:false,dashData:null,mhMember:null,mhData:null,mhLoading:false};
 function set(p){Object.assign(S,p);render()}
 function nxSat(){const d=new Date(),x=(6-d.getDay()+7)%7||0;d.setDate(d.getDate()+x);return d.toISOString().split('T')[0]}
 function fmtD(s){if(!s)return'—';const m=['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'],p=s.split('-');return parseInt(p[2])+' '+m[parseInt(p[1])-1]+' '+p[0]}
@@ -89,22 +101,69 @@ async function getAll(base,table,params={}){
 
 // ═══════════ CONNECT — just validate token by reading 1 record ═══════════
 async function connect(){
-  set({loading:true,error:null,statusMsg:'Vérification du token...'});
+  set({loading:true,error:null,statusMsg:'Connexion aux bases...'});
   try{
-    await api('GET',BASE1+'/'+TBL.members+'?pageSize=1');
+    // Step 1: list all bases (needs schema.bases:read)
+    const basesData=await api('GET','meta/bases');
+    const bases=(basesData.bases||[]).map(b=>({id:b.id,name:b.name}));
+    if(!bases.length)throw new Error('Aucune base trouvée avec ce token.');
+    set({statusMsg:'Détection des tables ('+bases.length+' bases)...'});
+    
+    // Step 2: scan each base for matching tables
+    let bestMembers=null,bestMembersScore=0,bestMat=null,bestMatCount=0;
+    for(const b of bases){
+      try{
+        const schema=await api('GET','meta/bases/'+b.id+'/tables');
+        const tables=(schema.tables||[]).map(t=>({id:t.id,name:t.name,_fn:(t.fields||[]).map(f=>f.name.toLowerCase().trim())}));
+        
+        // Detect member-related tables
+        const found={};
+        for(const t of tables){
+          for(const[key,sig]of Object.entries(SIGS)){if(!found[key]&&sig(t))found[key]=t.id}
+          // Detect material tables by name
+          for(const[mk,hint]of Object.entries(MAT_HINTS)){if(t.name.toLowerCase().includes(hint)&&!found['mat_'+mk])found['mat_'+mk]=t.id}
+        }
+        const sc=scoreBase(found);
+        if(sc>bestMembersScore){bestMembersScore=sc;bestMembers={baseId:b.id,name:b.name,tables:found}}
+        const matCount=Object.keys(found).filter(k=>k.startsWith('mat_')).length;
+        if(matCount>bestMatCount){bestMatCount=matCount;bestMat={baseId:b.id,name:b.name,tables:found}}
+      }catch(e){/* skip inaccessible bases */}
+    }
+    
+    if(!bestMembers||!bestMembers.tables.members)throw new Error('Aucune base avec une table membres détectée. Vérifiez que votre base contient les tables requises (Prenom, Nom, Patrouille...).');
+    
+    // Step 3: assign detected IDs
+    BASE1=bestMembers.baseId;
+    TBL.members=bestMembers.tables.members||'';
+    TBL.presence=bestMembers.tables.presence||'';
+    TBL.badges=bestMembers.tables.badges||'';
+    TBL.commandes=bestMembers.tables.commandes||'';
+    TBL.finances=bestMembers.tables.finances||'';
+    TBL.historique=bestMembers.tables.historique||'';
+    
+    if(bestMat&&bestMatCount>2){
+      BASE2=bestMat.baseId;
+      for(const[mk,hint]of Object.entries(MAT_HINTS)){MAT_TBL[mk]=bestMat.tables['mat_'+mk]||''}
+    }else{BASE2=BASE1;MAT_TBL={}}
+    
+    // Cache config
     localStorage.setItem('scout_token',S.token);
+    localStorage.setItem('scout_cfg2',JSON.stringify({BASE1,BASE2,TBL,MAT_TBL}));
+    
     set({statusMsg:'Chargement des membres...'});
     await loadMembers();
     if(S.year)set({screen:'home',loading:false,statusMsg:null});
     else set({screen:'year_select',loading:false,statusMsg:null});
   }catch(e){
-    let msg='Erreur de connexion.';
-    if(e.message.includes('401'))msg='Token invalide. Vérifiez votre token Airtable.';
-    else if(e.message.includes('403'))msg='Accès refusé. Assurez-vous que le token a accès aux bases.';
-    else if(e.message.includes('404'))msg='Base non trouvée. Vérifiez les accès du token.';
-    else msg=e.message;
+    let msg=e.message;
+    if(msg.includes('401'))msg='Token invalide. Vérifiez votre token Airtable.';
+    else if(msg.includes('403'))msg='Accès refusé. Ajoutez vos bases au token.';
+    else if(msg.includes('422'))msg='Scope manquant. Ajoutez schema.bases:read à votre token.';
     set({loading:false,statusMsg:null,error:msg});
   }
+}
+function restoreConfig(){
+  try{const c=JSON.parse(localStorage.getItem('scout_cfg2'));if(c&&c.BASE1&&c.TBL?.members){BASE1=c.BASE1;BASE2=c.BASE2;Object.assign(TBL,c.TBL);Object.assign(MAT_TBL,c.MAT_TBL||{});return true}}catch(e){}return false;
 }
 
 // ═══════════ DATA LOADING ═══════════
@@ -124,6 +183,47 @@ async function loadMaterial(){set({matLoading:true});try{const data={};for(const
 async function loadOrders(){set({ordersLoading:true});try{const recs=await getAll(BASE1,TBL.commandes,{filter:`{Annee Scoute}="${S.year}"`});set({orders:recs.map(r=>{const f=r.fields||{};return{rid:r.id,mid:f['Membre ID'],nom:f['Prenom Nom']||'',article:sv(f['Article']),taille:sv(f['Taille']),qty:f['Quantite']||1,statut:sv(f['Statut']),date:f['Date Commande']||'',badge:f['Badge Nom']||'',prix:f['Prix Unitaire']||0,paye:sv(f['Paye'])||'Non paye',livre:sv(f['Livre au membre'])||'Non livre',paid:f['Montant Paye']||0}}),ordersLoading:false})}catch(e){set({ordersLoading:false})}}
 
 async function loadFinances(){set({finLoading:true});try{const recs=await getAll(BASE1,TBL.finances,{filter:`{Annee Scoute}="${S.year}"`});set({finTx:recs.map(r=>{const f=r.fields||{};return{rid:r.id,desc:f['Description']||'',type:sv(f['Type']),montant:f['Montant']||0,date:f['Date']||'',mid:f['Membre ID'],nom:f['Prenom Nom']||'',cat:sv(f['Categorie'])}}),finLoading:false})}catch(e){set({finLoading:false})}}
+
+async function loadDashboard(){set({dashLoading:true});try{
+  const[attRecs,orderRecs,finRecs,badgeRecs]=await Promise.all([
+    getAll(BASE1,TBL.presence,{filter:`{Annee Scoute}="${S.year}"`}),
+    getAll(BASE1,TBL.commandes,{filter:`{Annee Scoute}="${S.year}"`}),
+    getAll(BASE1,TBL.finances,{filter:`{Annee Scoute}="${S.year}"`}),
+    getAll(BASE1,TBL.badges)
+  ]);
+  const am=actM();let totalP=0,totalA=0,perPat={};
+  attRecs.forEach(r=>{const f=r.fields||{};totalP+=(f['Presence']||0);totalA+=(f['Absence']||0);});
+  am.forEach(m=>{if(!perPat[m.pat])perPat[m.pat]={count:0,p:0,a:0};perPat[m.pat].count++});
+  attRecs.forEach(r=>{const f=r.fields||{};const mid=f['Membre ID'];const m=am.find(x=>x.id===mid);if(m&&perPat[m.pat]){perPat[m.pat].p+=(f['Presence']||0);perPat[m.pat].a+=(f['Absence']||0)}});
+  const reunions=[...new Set(attRecs.map(r=>r.fields?.['Reunion']).filter(Boolean))].length;
+  const orders=orderRecs.map(r=>r.fields||{});const tDue=orders.reduce((s,f)=>s+((f['Prix Unitaire']||0)*(f['Quantite']||1)),0);const tPaid=orders.reduce((s,f)=>s+(f['Montant Paye']||0),0);const unpaid=orders.filter(f=>sv(f['Paye'])!=='Paye').length;const undelivered=orders.filter(f=>sv(f['Livre au membre'])!=='Livre').length;
+  const finIn=finRecs.filter(r=>sv(r.fields?.['Type'])!=='Sortie').reduce((s,r)=>s+(r.fields?.['Montant']||0),0);const finOut=finRecs.filter(r=>sv(r.fields?.['Type'])==='Sortie').reduce((s,r)=>s+(r.fields?.['Montant']||0),0);
+  const badgesObtained=badgeRecs.filter(r=>sv(r.fields?.['Statut'])==='Obtenu').length;const badgesInProgress=badgeRecs.filter(r=>sv(r.fields?.['Statut'])==='En cours').length;
+  set({dashLoading:false,dashData:{am:am.length,reunions,totalP,totalA,perPat,tDue,tPaid,unpaid,undelivered,orders:orders.length,finIn,finOut,balance:finIn-finOut,badgesObtained,badgesInProgress,totalOwed:tDue-tPaid}});
+}catch(e){set({dashLoading:false,dashData:null})}}
+
+async function loadMemberHistory(mid){set({mhLoading:true});try{
+  const[attAll,histRecs,badgeRecs,orderRecs]=await Promise.all([
+    getAll(BASE1,TBL.presence,{filter:`{Membre ID}=${mid}`}),
+    getAll(BASE1,TBL.historique,{filter:`{Membre ID}=${mid}`}),
+    getAll(BASE1,TBL.badges,{filter:`{Membre ID}=${mid}`}),
+    getAll(BASE1,TBL.commandes,{filter:`{Membre ID}=${mid}`})
+  ]);
+  const years={};
+  attAll.forEach(r=>{const f=r.fields||{};const yr=sv(f['Annee Scoute'])||'?';if(!years[yr])years[yr]={p:0,a:0,pat:'',fn:'',badges:0,orders:[]};years[yr].p+=(f['Presence']||0);years[yr].a+=(f['Absence']||0)});
+  histRecs.forEach(r=>{const f=r.fields||{};const yr=sv(f['Annee Scoute'])||'?';if(!years[yr])years[yr]={p:0,a:0,pat:'',fn:'',badges:0,orders:[]};years[yr].pat=sv(f['Patrouille'])||years[yr].pat;years[yr].fn=sv(f['Fonction'])||years[yr].fn});
+  badgeRecs.forEach(r=>{const f=r.fields||{};const yr=sv(f['Annee Scoute'])||'all';if(sv(f['Statut'])==='Obtenu'){if(years[yr])years[yr].badges++;else{if(!years['all'])years['all']={p:0,a:0,pat:'',fn:'',badges:0,orders:[]};years['all'].badges++}}});
+  orderRecs.forEach(r=>{const f=r.fields||{};const yr=sv(f['Annee Scoute'])||'?';if(!years[yr])years[yr]={p:0,a:0,pat:'',fn:'',badges:0,orders:[]};years[yr].orders.push({article:sv(f['Article']),qty:f['Quantite']||1,prix:f['Prix Unitaire']||0,paye:sv(f['Paye'])||'Non paye',livre:sv(f['Livre au membre'])||'Non livre'})});
+  const m=S.members.find(x=>x.id===mid);if(m&&S.year){if(!years[S.year])years[S.year]={p:0,a:0,pat:'',fn:'',badges:0,orders:[]};if(!years[S.year].pat)years[S.year].pat=m.pat;if(!years[S.year].fn)years[S.year].fn=m.fn}
+  set({mhData:{years,totalBadges:badgeRecs.filter(r=>sv(r.fields?.['Statut'])==='Obtenu').length},mhLoading:false});
+}catch(e){set({mhLoading:false,mhData:null})}}
+
+async function saveYearSnapshot(){
+  const am=actM();const bs=10;
+  for(let i=0;i<am.length;i+=bs){const chunk=am.slice(i,i+bs);
+    const records=chunk.map(m=>({fields:{'Membre ID':m.id,'Prenom Nom':`${m.prenom} ${m.nom}`,'Patrouille':m.pat,'Fonction':m.fn||'Scout','Annee Scoute':S.year}}));
+    await api('POST',BASE1+'/'+TBL.historique,{records,typecast:true})}
+}
 
 // ═══════════ ACTIONS ═══════════
 async function submitAtt(){set({submitting:true,progress:0,error:null});try{const am=actM(),bs=10,total=Math.ceil(am.length/bs);let done=0;for(let i=0;i<am.length;i+=bs){const chunk=am.slice(i,i+bs);const records=chunk.map(m=>({fields:{'Membre ID':parseInt(m.id),'Reunion':S.meetDate,'Presence':S.att[m.id]?1:0,'Absence':S.att[m.id]?0:1,'Annee Scoute':S.year,...((!S.att[m.id]&&S.reasons[m.id])?{'why?':S.reasons[m.id]}:{})}}));await api('POST',BASE1+'/'+TBL.presence,{records,typecast:true});done++;set({progress:Math.round(done/total*100)})}const v=am.map(m=>S.att[m.id]);set({savedStats:{p:v.filter(Boolean).length,a:v.filter(x=>!x).length},screen:'att_ok',submitting:false})}catch(e){set({error:'Erreur: '+e.message,submitting:false})}}
@@ -152,12 +252,12 @@ function mH(t,sub,bk){return`<div class="mod-header"><div class="mod-back" oncli
 
 // ═══════════ RENDER ═══════════
 function render(){document.getElementById('root').setAttribute('data-theme',S.theme);const app=document.getElementById('app');let h='';
-  switch(S.screen){case 'setup':h=rSetup();break;case 'year_select':h=rYear();break;case 'home':h=rHome();break;case 'attendance':h=rAtt();break;case 'att_history':h=rAttHist();break;case 'att_ok':h=rAttOk();break;case 'formation':h=rFormList();break;case 'form_profile':h=rFormProf();break;case 'form_pillar':h=rFormPillar();break;case 'material':h=rMat();break;case 'orders':h=rOrders();break;case 'order_form':h=rOrderForm();break;case 'finance':h=rFin();break;case 'member_orders':h=rMemOrders();break;case 'troupe_setup':h=rSetupTr();break;default:h=rHome()}
+  switch(S.screen){case 'setup':h=rSetup();break;case 'year_select':h=rYear();break;case 'home':h=rHome();break;case 'dashboard':h=rDash();break;case 'attendance':h=rAtt();break;case 'att_history':h=rAttHist();break;case 'att_ok':h=rAttOk();break;case 'formation':h=rFormList();break;case 'form_profile':h=rFormProf();break;case 'form_pillar':h=rFormPillar();break;case 'material':h=rMat();break;case 'orders':h=rOrders();break;case 'order_form':h=rOrderForm();break;case 'finance':h=rFin();break;case 'member_orders':h=rMemOrders();break;case 'troupe_setup':h=rSetupTr();break;case 'member_history':h=rMemberHist();break;default:h=rHome()}
   app.innerHTML=h+(S.modal?`<div class="modal-overlay" onclick="set({modal:null})"><div class="modal" onclick="event.stopPropagation()">${S.modal}</div></div>`:'')}
 
-function rSetup(){return`<div class="setup"><div class="setup-icon">⚜</div><h1>Scout Manager</h1><p>Connectez votre Airtable pour gérer votre troupe.</p><input type="password" id="tok" placeholder="Collez votre token ici..." value="${E(S.token)}" onkeydown="if(event.key==='Enter')doConnect()" oninput="S.token=this.value">${S.error?`<div class="error-msg" style="max-width:380px;word-break:break-word">${E(S.error)}</div>`:''}${S.statusMsg?`<div class="status-msg">${E(S.statusMsg)}</div>`:''}${S.loading?'<div class="spinner" style="margin:0 auto"></div>':''}<button class="btn btn-primary" onclick="doConnect()" ${S.loading?'disabled':''}>${S.loading?'Connexion...':'Se connecter'}</button><div class="hint-box"><strong>Comment créer votre token:</strong><br>1. Allez sur <a href="https://airtable.com/create/tokens" target="_blank">airtable.com/create/tokens</a><br>2. Cliquez <strong>Create new token</strong><br>3. Nom: <code>Scout Manager</code><br>4. Scopes: cochez <code>data.records:read</code> et <code>data.records:write</code><br>5. Access: cliquez <strong>Add a base</strong> → ajoutez <strong>Membres et Suivi</strong> et <strong>Inventaire</strong><br>6. Cliquez <strong>Create token</strong> et copiez-le ici</div><div style="display:flex;align-items:center;gap:8px;margin-top:8px"><span style="font-size:12px;color:var(--text3)">Thème:</span><div class="theme-toggle" onclick="toggleTheme()">${S.theme==='dark'?'☀️':'🌙'}</div></div></div>`}
+function rSetup(){return`<div class="setup"><div class="setup-icon">⚜</div><h1>Scout Manager</h1><p>Connectez votre Airtable pour gérer votre troupe.</p><input type="password" id="tok" placeholder="Collez votre token ici..." value="${E(S.token)}" onkeydown="if(event.key==='Enter')doConnect()" oninput="S.token=this.value">${S.error?`<div class="error-msg" style="max-width:380px;word-break:break-word">${E(S.error)}</div>`:''}${S.statusMsg?`<div class="status-msg">${E(S.statusMsg)}</div>`:''}${S.loading?'<div class="spinner" style="margin:0 auto"></div>':''}<button class="btn btn-primary" onclick="doConnect()" ${S.loading?'disabled':''}>${S.loading?'Connexion...':'Se connecter'}</button><div class="hint-box"><strong>Comment créer votre token:</strong><br>1. Allez sur <a href="https://airtable.com/create/tokens" target="_blank">airtable.com/create/tokens</a><br>2. Cliquez <strong>Create new token</strong><br>3. Nom: <code>Scout Manager</code><br>4. Scopes: cochez <code>data.records:read</code>, <code>data.records:write</code> et <code>schema.bases:read</code><br>5. Access: cliquez <strong>Add a base</strong> → ajoutez vos bases scout<br>6. Cliquez <strong>Create token</strong> et copiez-le ici</div><div style="display:flex;align-items:center;gap:8px;margin-top:8px"><span style="font-size:12px;color:var(--text3)">Thème:</span><div class="theme-toggle" onclick="toggleTheme()">${S.theme==='dark'?'☀️':'🌙'}</div></div></div>`}
 function rYear(){const cy=new Date().getFullYear();const yrs=[];for(let y=cy-2;y<=cy+1;y++)yrs.push(`${y}-${y+1}`);return`<div class="setup"><div class="setup-icon">📅</div><h1>Année scoute</h1><p>Sélectionnez l'année en cours.</p><select id="yearsel" onchange="S.year=this.value"><option value="">— Choisir —</option>${yrs.map(y=>`<option value="${y}" ${S.year===y?'selected':''}>${y}</option>`).join('')}</select><button class="btn btn-primary" onclick="doYear()">Continuer</button><button class="btn btn-outline btn-sm" onclick="doLogout()">← Retour</button></div>`}
-function rHome(){const am=actM();return`<div class="fade-in"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><div></div><div style="display:flex;gap:8px;align-items:center"><div class="theme-toggle" onclick="toggleTheme()">${S.theme==='dark'?'☀️':'🌙'}</div><button class="btn btn-outline btn-sm" onclick="doLogout()">⏻</button></div></div><div class="home-header"><h1>⚜ Scout Manager</h1><p>${am.length} scouts · ${getPats().length} patrouilles</p><div class="home-year">${E(S.year)}</div></div><div class="menu-grid"><div class="menu-card" onclick="goTo('attendance')"><span class="icon">✅</span><div class="label">Présence</div><div class="desc">Prendre la présence</div></div><div class="menu-card" onclick="goTo('formation')"><span class="icon">📚</span><div class="label">Formation</div><div class="desc">Progression & badges</div></div><div class="menu-card" onclick="goTo('material')"><span class="icon">🧰</span><div class="label">Matériel</div><div class="desc">Inventaire du local</div></div><div class="menu-card" onclick="goTo('orders')"><span class="icon">👕</span><div class="label">Commandes</div><div class="desc">Uniformes & badges</div></div><div class="menu-card" onclick="goTo('finance')"><span class="icon">💰</span><div class="label">Finances</div><div class="desc">Caisse & paiements</div></div><div class="menu-card" onclick="goTo('member_orders')"><span class="icon">👤</span><div class="label">Comptes</div><div class="desc">Dettes & livraisons</div></div><div class="menu-card" onclick="goTo('troupe_setup')"><span class="icon">⚙️</span><div class="label">Setup</div><div class="desc">Patrouilles & rôles</div></div></div><div style="display:flex;justify-content:center;gap:12px;margin-top:28px"><button class="btn btn-outline btn-sm" onclick="set({screen:'year_select'})">📅 ${E(S.year)}</button></div></div>`}
+function rHome(){const am=actM();return`<div class="fade-in"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><div></div><div style="display:flex;gap:8px;align-items:center"><div class="theme-toggle" onclick="toggleTheme()">${S.theme==='dark'?'☀️':'🌙'}</div><button class="btn btn-outline btn-sm" onclick="doLogout()">⏻</button></div></div><div class="home-header"><h1>⚜ Scout Manager</h1><p>${am.length} scouts · ${getPats().length} patrouilles</p><div class="home-year">${E(S.year)}</div></div><div class="menu-grid"><div class="menu-card" onclick="goTo('attendance')"><span class="icon">✅</span><div class="label">Présence</div><div class="desc">Prendre la présence</div></div><div class="menu-card" onclick="goTo('formation')"><span class="icon">📚</span><div class="label">Formation</div><div class="desc">Progression & badges</div></div><div class="menu-card" onclick="goTo('material')"><span class="icon">🧰</span><div class="label">Matériel</div><div class="desc">Inventaire du local</div></div><div class="menu-card" onclick="goTo('orders')"><span class="icon">👕</span><div class="label">Commandes</div><div class="desc">Uniformes & badges</div></div><div class="menu-card" onclick="goTo('finance')"><span class="icon">💰</span><div class="label">Finances</div><div class="desc">Caisse & paiements</div></div><div class="menu-card" onclick="goTo('member_orders')"><span class="icon">👤</span><div class="label">Comptes</div><div class="desc">Dettes & livraisons</div></div><div class="menu-card" onclick="goTo('troupe_setup')"><span class="icon">⚙️</span><div class="label">Setup</div><div class="desc">Patrouilles & rôles</div></div><div class="menu-card" onclick="goTo('dashboard')"><span class="icon">📊</span><div class="label">Dashboard</div><div class="desc">Résumé & statistiques</div></div></div><div style="display:flex;justify-content:center;gap:12px;margin-top:28px"><button class="btn btn-outline btn-sm" onclick="set({screen:'year_select'})">📅 ${E(S.year)}</button></div></div>`}
 
 // ═══ ATTENDANCE ═══
 function rAtt(){const am=actM(),ps=getPats(),fl=filtM('attFilter','attSearch'),pC=am.filter(m=>S.att[m.id]).length,aC=am.length-pC;return`<div class="fade-in">${mH('Présence',fmtD(S.meetDate),'home')}<div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap"><input type="date" style="padding:8px 12px;background:var(--card-bg);border:1.5px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--font);font-size:14px;outline:none;color-scheme:${S.theme}" value="${S.meetDate}" onchange="S.meetDate=this.value"><button class="btn btn-sm btn-outline" onclick="set({screen:'att_history'});loadHistory()">📊 Totaux</button><div style="margin-left:auto;display:flex;gap:6px"><div class="stat-box" style="padding:6px 12px"><div class="num" style="color:var(--accent);font-size:16px">${pC}</div><div class="lbl">P</div></div><div class="stat-box" style="padding:6px 12px"><div class="num" style="color:var(--danger);font-size:16px">${aC}</div><div class="lbl">A</div></div></div></div><div class="filters"><span class="chip ${S.attFilter==='all'?'active':''}" onclick="set({attFilter:'all'})">Tous (${am.length})</span>${ps.map(p=>`<span class="chip ${S.attFilter===p?'active':''}" style="${S.attFilter===p?'background:'+patC(p)+';border-color:'+patC(p)+';color:#fff':''}" onclick="set({attFilter:'${E(p)}'})">${PAT_ICONS[p]||''} ${E(p)}</span>`).join('')}</div><div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap"><div class="search-bar" style="flex:1;min-width:160px;margin-bottom:0">${svS}<input placeholder="Rechercher..." value="${E(S.attSearch)}" oninput="set({attSearch:this.value})"></div><button class="btn btn-sm" style="background:var(--accent-bg);color:var(--accent)" onclick="markAll(true)">✓</button><button class="btn btn-sm" style="background:var(--danger-bg);color:var(--danger)" onclick="markAll(false)">✗</button></div><div style="display:flex;flex-direction:column;gap:4px">${fl.map(m=>{const isP=S.att[m.id],co=patC(m.pat);return`<div class="att-member ${isP?'present':'absent'}"><div class="att-top" onclick="togAtt(${m.id})"><div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"><span style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(m.prenom)} ${E(m.nom)}</span><span class="patrol-badge" style="background:${co}18;color:${co}">${E(m.pat)}</span></div><span class="att-status ${isP?'p':'a'}">${isP?'✓ Présent':'✗ Absent'}</span></div>${!isP?`<input class="att-reason" placeholder="Raison..." value="${E(S.reasons[m.id]||'')}" onclick="event.stopPropagation()" oninput="S.reasons[${m.id}]=this.value">`:''}</div>`}).join('')}</div>${S.error?`<div style="padding:10px;margin-top:10px;background:var(--danger-bg);border-radius:var(--radius);color:var(--danger);font-size:13px">${E(S.error)}</div>`:''}<div class="submit-bar">${S.submitting?`<span style="font-size:13px;font-weight:600;color:var(--accent)">Envoi... ${S.progress}%</span><div class="progress-bar"><div class="progress-fill" style="width:${S.progress}%"></div></div>`:`<button class="btn btn-primary" onclick="submitAtt()">Soumettre — ${fmtD(S.meetDate)}</button>`}</div></div>`}
@@ -184,15 +284,42 @@ function rFin(){if(S.finLoading)return`<div class="fade-in">${mH('Finances','','
 // ═══ MEMBER ORDERS ═══
 function rMemOrders(){const am=actM(),md={};S.orders.forEach(o=>{const mid=o.mid;if(!mid)return;if(!md[mid])md[mid]={nom:o.nom,total:0,paid:0,orders:[]};md[mid].total+=(o.prix*o.qty)||0;md[mid].paid+=(o.paid||0);md[mid].orders.push(o)});const dl=Object.entries(md).map(([mid,d])=>({mid:parseInt(mid),...d,owed:d.total-d.paid})).sort((a,b)=>b.owed-a.owed);return`<div class="fade-in">${mH('Comptes '+S.year,'','home')}${dl.length===0?'<div class="empty-state"><span class="e-icon">👤</span>Aucune commande.</div>':''}${dl.map(d=>{const m=am.find(x=>x.id===d.mid),co=m?patC(m.pat):'#888',allP=d.owed<=0,allD=d.orders.every(o=>o.livre==='Livre');return`<div class="fin-card"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">${m?`<div class="avatar" style="width:32px;height:32px;font-size:11px;background:${co}">${(m.prenom[0]||'')+(m.nom[0]||'')}</div>`:''}<div style="flex:1"><div style="font-weight:600;font-size:14px">${E(d.nom)}</div><div style="font-size:11px;color:var(--text3)">${d.orders.length} cmd</div></div><div style="text-align:right"><div style="font-family:var(--font-mono);font-weight:700;font-size:14px;color:${allP?'var(--accent)':'var(--danger)'}">${allP?'Soldé':$(d.owed)}</div><div style="font-size:10px;color:var(--text3)">${allD?'✓ Livré':'En attente'}</div></div></div>${d.orders.map(o=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--border-light);font-size:12px"><span style="flex:1">${E(o.article)}${o.taille?' '+E(o.taille):''} ×${o.qty}</span><span class="pill" style="background:${o.paye==='Paye'?'var(--accent-bg)':o.paye==='Partiellement'?'var(--warn-bg)':'var(--danger-bg)'};color:${o.paye==='Paye'?'var(--accent)':o.paye==='Partiellement'?'var(--warn)':'var(--danger)'}">${E(o.paye)}</span><span class="pill" style="background:${o.livre==='Livre'?'var(--accent-bg)':'var(--danger-bg)'};color:${o.livre==='Livre'?'var(--accent)':'var(--danger)'}">${E(o.livre)}</span></div>`).join('')}</div>`}).join('')}</div>`}
 
+// ═══ DASHBOARD ═══
+function rDash(){if(S.dashLoading)return`<div class="fade-in">${mH('Dashboard','','home')}<div class="loading"><div class="spinner"></div><span class="loading-text">Chargement des statistiques...</span></div></div>`;const d=S.dashData;if(!d)return`<div class="fade-in">${mH('Dashboard','','home')}<div class="empty-state"><span class="e-icon">📊</span>Erreur de chargement.</div></div>`;const attRate=d.totalP+d.totalA>0?Math.round(d.totalP/(d.totalP+d.totalA)*100):0;const ps=Object.entries(d.perPat).sort((a,b)=>a[0].localeCompare(b[0]));
+return`<div class="fade-in">${mH('Dashboard '+S.year,'Résumé','home')}
+<div class="fin-card"><h3>📋 Troupe</h3><div class="stat-row"><div class="stat-box"><div class="num" style="color:var(--accent)">${d.am}</div><div class="lbl">Scouts</div></div><div class="stat-box"><div class="num" style="color:var(--info)">${getPats().length}</div><div class="lbl">Patrouilles</div></div><div class="stat-box"><div class="num" style="color:var(--purple)">${d.reunions}</div><div class="lbl">Réunions</div></div></div></div>
+<div class="fin-card"><h3>✅ Présence</h3><div style="text-align:center;margin-bottom:12px"><div style="position:relative;width:80px;height:80px;margin:0 auto">${pRing(attRate/100,attRate>=75?'var(--accent)':attRate>=50?'var(--warn)':'var(--danger)',80,6)}<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;font-family:var(--font-mono)">${attRate}%</div></div><div style="font-size:12px;color:var(--text3);margin-top:4px">Taux global</div></div><div class="stat-row"><div class="stat-box"><div class="num" style="color:var(--accent)">${d.totalP}</div><div class="lbl">Présences</div></div><div class="stat-box"><div class="num" style="color:var(--danger)">${d.totalA}</div><div class="lbl">Absences</div></div></div>
+${ps.length?`<div style="margin-top:8px">${ps.map(([p,v])=>{const r=v.p+v.a>0?Math.round(v.p/(v.p+v.a)*100):0;return`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--border-light)"><span style="font-size:16px">${PAT_ICONS[p]||''}</span><span style="flex:1;font-weight:500;font-size:13px">${E(p)} <span style="color:var(--text3);font-weight:400">(${v.count})</span></span><div style="width:80px;height:6px;border-radius:3px;background:var(--border-light);overflow:hidden"><div style="height:100%;border-radius:3px;width:${r}%;background:${patC(p)}"></div></div><span class="rate-badge ${r>=75?'rate-good':r>=50?'rate-mid':'rate-bad'}" style="min-width:44px;text-align:center">${r}%</span></div>`}).join('')}</div>`:''}</div>
+<div class="fin-card"><h3>💰 Finances</h3><div class="fin-balance" style="padding:10px;font-size:24px;margin-bottom:8px"><span style="color:${d.balance>=0?'var(--accent)':'var(--danger)'}">${$(d.balance)}</span></div><div class="stat-row"><div class="stat-box"><div class="num" style="color:var(--accent);font-size:14px">${$(d.finIn)}</div><div class="lbl">Entrées</div></div><div class="stat-box"><div class="num" style="color:var(--danger);font-size:14px">${$(d.finOut)}</div><div class="lbl">Sorties</div></div><div class="stat-box"><div class="num" style="color:var(--warn);font-size:14px">${$(d.totalOwed)}</div><div class="lbl">Dettes</div></div></div></div>
+<div class="fin-card"><h3>👕 Commandes</h3><div class="stat-row"><div class="stat-box"><div class="num" style="color:var(--info)">${d.orders}</div><div class="lbl">Total</div></div><div class="stat-box"><div class="num" style="color:var(--danger)">${d.unpaid}</div><div class="lbl">Non payé</div></div><div class="stat-box"><div class="num" style="color:var(--warn)">${d.undelivered}</div><div class="lbl">Non livré</div></div></div></div>
+<div class="fin-card"><h3>📚 Formation</h3><div class="stat-row"><div class="stat-box"><div class="num" style="color:var(--accent)">${d.badgesObtained}</div><div class="lbl">Badges obtenus</div></div><div class="stat-box"><div class="num" style="color:var(--warn)">${d.badgesInProgress}</div><div class="lbl">En cours</div></div></div></div>
+<div class="fin-card"><h3>👤 Profil par membre</h3><p style="font-size:12px;color:var(--text2);margin-bottom:10px">Voir l'historique complet d'un scout à travers les années.</p>${actM().map(m=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--border-light);cursor:pointer" onclick="viewMH(${m.id})"><div class="avatar" style="width:28px;height:28px;font-size:10px;background:${patC(m.pat)}">${(m.prenom[0]||'')+(m.nom[0]||'')}</div><span style="flex:1;font-size:13px;font-weight:500">${E(m.prenom)} ${E(m.nom)}</span><span class="patrol-badge" style="background:${patC(m.pat)}18;color:${patC(m.pat)}">${E(m.pat)}</span><span style="color:var(--text3)">${svC}</span></div>`).join('')}</div>
+<button class="btn btn-outline" style="width:100%;justify-content:center;margin-top:8px" onclick="doSnapshot()">📸 Sauvegarder snapshot ${E(S.year)}</button>
+</div>`}
+
+// ═══ MEMBER HISTORY ═══
+function rMemberHist(){const m=S.mhMember;if(!m)return'';if(S.mhLoading)return`<div class="fade-in">${mH(m.prenom+' '+m.nom,'Historique','dashboard')}<div class="loading"><div class="spinner"></div><span class="loading-text">Chargement historique...</span></div></div>`;const d=S.mhData;if(!d)return`<div class="fade-in">${mH(m.prenom+' '+m.nom,'','dashboard')}<div class="empty-state">Pas de données.</div></div>`;
+const yrs=Object.keys(d.years).filter(y=>y!=='all'&&y!=='?').sort().reverse();
+return`<div class="fade-in">${mH(m.prenom+' '+m.nom,'Historique','dashboard')}
+<div style="display:flex;align-items:center;gap:14px;margin-bottom:20px"><div class="avatar" style="width:52px;height:52px;font-size:22px;background:${patC(m.pat)}">${PAT_ICONS[m.pat]||'⚜'}</div><div><div style="font-family:var(--font-display);font-size:20px;font-weight:500">${E(m.prenom)} ${E(m.nom)}</div><div style="font-size:13px;color:var(--text2)">Actuellement: ${PAT_ICONS[m.pat]||''} ${E(m.pat)} ${m.fn?'· '+E(m.fn):''}</div><div style="font-size:12px;color:var(--text3);margin-top:2px">${d.totalBadges} badges obtenus au total</div></div></div>
+${yrs.map(yr=>{const y=d.years[yr];const tot=y.p+y.a;const rate=tot>0?Math.round(y.p/tot*100):0;const rc=rate>=75?'rate-good':rate>=50?'rate-mid':'rate-bad';const oDue=y.orders.reduce((s,o)=>s+(o.prix*o.qty||0),0);const oUnpaid=y.orders.filter(o=>o.paye!=='Paye').length;
+return`<div class="fin-card"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div class="home-year" style="margin:0">${E(yr)}</div>${y.pat?`<span class="patrol-badge" style="background:${patC(y.pat)}18;color:${patC(y.pat)}">${PAT_ICONS[y.pat]||''} ${E(y.pat)}</span>`:''} ${y.fn&&y.fn!=='Scout'?`<span class="pill" style="background:var(--purple-bg);color:var(--purple)">${E(y.fn)}</span>`:''}</div>
+<div class="stat-row"><div class="stat-box"><div class="num" style="color:var(--accent);font-size:14px">${y.p}</div><div class="lbl">Présences</div></div><div class="stat-box"><div class="num" style="color:var(--danger);font-size:14px">${y.a}</div><div class="lbl">Absences</div></div><div class="stat-box"><div class="num" style="font-size:14px"><span class="rate-badge ${rc}">${tot>0?rate+'%':'—'}</span></div><div class="lbl">Taux</div></div>${y.badges?`<div class="stat-box"><div class="num" style="color:var(--info);font-size:14px">${y.badges}</div><div class="lbl">Badges</div></div>`:''}</div>
+${y.orders.length?`<div style="font-size:12px;color:var(--text2);margin-top:4px"><strong>${y.orders.length}</strong> commande${y.orders.length>1?'s':''} · Total: ${$(oDue)}${oUnpaid?' · <span style="color:var(--danger)">'+oUnpaid+' non payé</span>':' · <span style="color:var(--accent)">Tout payé ✓</span>'}</div>`:''}</div>`}).join('')}
+${yrs.length===0?'<div class="empty-state"><span class="e-icon">📅</span>Pas encore d\'historique. Sauvegardez un snapshot depuis le Dashboard.</div>':''}
+</div>`}
+
 // ═══ SETUP TROUPE ═══
 function rSetupTr(){const am=actM(),ps=getPats(),g={};am.forEach(m=>{const p=m.pat||'—';if(!g[p])g[p]=[];g[p].push(m)});return`<div class="fade-in">${mH('Setup '+S.year,'Patrouilles & rôles','home')}<div class="fin-card"><h3>📋 Vue d'ensemble</h3><div class="stat-row">${ps.map(p=>`<div class="stat-box"><div class="num" style="color:${patC(p)};font-size:16px">${(g[p]||[]).length}</div><div class="lbl">${PAT_ICONS[p]||''} ${E(p)}</div></div>`).join('')}</div></div>${ps.sort((a,b)=>{const ai=PATROUILLES.indexOf(a),bi=PATROUILLES.indexOf(b);return(ai===-1?99:ai)-(bi===-1?99:bi)}).map(pat=>{const ms=g[pat]||[],cp=ms.find(m=>m.fn==='CP'),sp=ms.find(m=>m.fn==='SP');return`<div class="fin-card"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="width:14px;height:14px;border-radius:50%;background:${patC(pat)}"></div><div style="font-family:var(--font-display);font-size:16px;font-weight:500;flex:1">${PAT_ICONS[pat]||''} ${E(pat)}</div><span style="font-size:11px;color:var(--text3);background:var(--bg3);padding:2px 10px;border-radius:10px;font-weight:600">${ms.length}</span></div><div style="display:flex;gap:8px;margin-bottom:10px"><div style="flex:1;padding:8px 12px;border-radius:var(--radius);background:var(--purple-bg);border:1px solid rgba(192,132,252,.15)"><div style="font-size:10px;color:var(--purple);font-weight:600;text-transform:uppercase">CP</div><div style="font-size:13px;font-weight:500;margin-top:2px">${cp?E(cp.prenom)+' '+E(cp.nom):'<span style="color:var(--text3)">—</span>'}</div></div><div style="flex:1;padding:8px 12px;border-radius:var(--radius);background:var(--info-bg);border:1px solid rgba(96,165,250,.15)"><div style="font-size:10px;color:var(--info);font-weight:600;text-transform:uppercase">SP</div><div style="font-size:13px;font-weight:500;margin-top:2px">${sp?E(sp.prenom)+' '+E(sp.nom):'<span style="color:var(--text3)">—</span>'}</div></div></div>${ms.map(m=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--border-light);font-size:13px"><div class="avatar" style="width:28px;height:28px;font-size:10px;background:${patC(pat)}">${(m.prenom[0]||'')+(m.nom[0]||'')}</div><span style="flex:1;font-weight:500">${E(m.prenom)} ${E(m.nom)}</span>${m.fn?`<span class="pill" style="background:${m.fn==='CP'?'var(--purple-bg)':'var(--info-bg)'};color:${m.fn==='CP'?'var(--purple)':'var(--info)'}">${E(m.fn)}</span>`:''}<select style="padding:4px 8px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--text);font-family:var(--font)" onchange="setRole('${m.rid}',this.value)"><option value="" ${!m.fn?'selected':''}>Scout</option><option value="CP" ${m.fn==='CP'?'selected':''}>CP</option><option value="SP" ${m.fn==='SP'?'selected':''}>SP</option></select><select style="padding:4px 8px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--text);font-family:var(--font)" onchange="setPat('${m.rid}',this.value)">${PATROUILLES.map(p=>`<option value="${E(p)}" ${m.pat===p?'selected':''}>${PAT_ICONS[p]} ${E(p)}</option>`).join('')}</select></div>`).join('')}<button class="btn btn-sm btn-outline" style="width:100%;justify-content:center;margin-top:8px" onclick="showTransfer('${E(pat)}')">+ Transférer</button></div>`}).join('')}<div class="fin-card"><h3>🔄 Activer pour ${E(S.year)}</h3><p style="font-size:12px;color:var(--text2);margin-bottom:10px">Scouts d'une autre année ou sans année assignée.</p>${S.members.filter(m=>!m.year||m.year!==S.year).length===0?'<div style="text-align:center;color:var(--text3);font-size:13px;padding:8px">Tous actifs ✓</div>':''}${S.members.filter(m=>!m.year||m.year!==S.year).map(m=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--border-light);font-size:13px"><span style="flex:1;font-weight:500">${E(m.prenom)} ${E(m.nom)}</span><span style="font-size:11px;color:var(--text3)">${E(m.pat)}${m.year?' · '+E(m.year):''}</span><button class="btn btn-sm" style="background:var(--accent-bg);color:var(--accent);padding:4px 12px" onclick="activate('${m.rid}')">Activer</button></div>`).join('')}</div></div>`}
 
 // ═══════════ GLOBAL HANDLERS ═══════════
 window.doConnect=()=>{S.token=document.getElementById('tok')?.value?.trim()||S.token;if(!S.token){set({error:'Veuillez coller votre token'});return}connect()};
 window.doYear=()=>{const s=document.getElementById('yearsel');if(s)S.year=s.value;if(!S.year)return;localStorage.setItem('scout_year',S.year);set({screen:'home'})};
-window.doLogout=()=>{localStorage.removeItem('scout_token');localStorage.removeItem('scout_year');S.token='';S.year='';S.members=[];set({screen:'setup',error:null})};
+window.doLogout=()=>{localStorage.removeItem('scout_token');localStorage.removeItem('scout_year');localStorage.removeItem('scout_cfg2');S.token='';S.year='';S.members=[];BASE1='';BASE2='';set({screen:'setup',error:null})};
 window.toggleTheme=()=>{S.theme=S.theme==='dark'?'light':'dark';localStorage.setItem('scout_theme',S.theme);render()};
-window.goTo=(sc)=>{set({screen:sc,error:null,modal:null});if(sc==='material'&&Object.keys(S.matData).length===0)loadMaterial();if(sc==='orders'||sc==='member_orders')loadOrders();if(sc==='finance'){loadFinances();loadOrders()}if(sc==='formation')set({selMember:null,activePillar:null,progressRecs:[],openSec:{}});if(sc==='attendance'){const att={};actM().forEach(m=>att[m.id]=true);set({att,reasons:{},meetDate:nxSat(),attSearch:'',attFilter:'all'})}};
+window.goTo=(sc)=>{set({screen:sc,error:null,modal:null});if(sc==='material'&&Object.keys(S.matData).length===0)loadMaterial();if(sc==='orders'||sc==='member_orders')loadOrders();if(sc==='finance'){loadFinances();loadOrders()}if(sc==='dashboard')loadDashboard();if(sc==='formation')set({selMember:null,activePillar:null,progressRecs:[],openSec:{}});if(sc==='attendance'){const att={};actM().forEach(m=>att[m.id]=true);set({att,reasons:{},meetDate:nxSat(),attSearch:'',attFilter:'all'})}};
+window.viewMH=(id)=>{const m=S.members.find(x=>x.id===id);if(m){set({mhMember:m,screen:'member_history'});loadMemberHistory(m.id)}};
+window.doSnapshot=async()=>{if(!confirm('Sauvegarder un snapshot de toutes les patrouilles/rôles pour '+S.year+'?'))return;try{set({statusMsg:'Sauvegarde...'});await saveYearSnapshot();set({statusMsg:null});alert('Snapshot sauvegardé ✓')}catch(e){set({statusMsg:null});alert('Erreur: '+e.message)}};
 window.togAtt=(id)=>{S.att[id]=!S.att[id];render()};window.markAll=(v)=>{filtM('attFilter','attSearch').forEach(m=>S.att[m.id]=v);render()};
 window.resetAtt=()=>{const att={};actM().forEach(m=>att[m.id]=true);set({att,reasons:{},meetDate:nxSat(),screen:'attendance',error:null})};
 window.selForm=(id)=>{const m=S.members.find(x=>x.id===id);if(m){set({selMember:m,screen:'form_profile',activePillar:null,openSec:{}});loadProgress(m.id)}};
@@ -210,9 +337,10 @@ window.showTransfer=(pat)=>{const inact=S.members.filter(m=>!m.year||m.year!==S.
 
 // ═══════════ INIT ═══════════
 (async function(){
-  if(S.token){set({loading:true,statusMsg:'Reconnexion...',screen:'setup'});
+  if(S.token&&restoreConfig()){
+    set({loading:true,statusMsg:'Reconnexion...',screen:'setup'});
     try{await loadMembers();if(S.year)set({screen:'home',loading:false,statusMsg:null});else set({screen:'year_select',loading:false,statusMsg:null})}
-    catch(e){set({loading:false,statusMsg:null,error:'Session expirée — reconnectez-vous.',screen:'setup'})}
+    catch(e){localStorage.removeItem('scout_cfg2');set({loading:false,statusMsg:null,error:'Session expirée — reconnectez-vous.',screen:'setup'})}
   }else render();
 })();
 </script>
