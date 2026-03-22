@@ -44,7 +44,7 @@
 <script>
 // ═══════════ CONFIG — auto-detected on connect ═══════════
 let BASE1='', BASE2='';
-let TBL={members:'',presence:'',badges:'',commandes:'',finances:'',historique:''};
+let TBL={members:'',presence:'',badges:'',commandes:'',finances:'',historique:'',config:''};
 let MAT_TBL={wood:'',tools:'',firstaid:'',food:'',supplies:'',bancoffre_loup:'',bancoffre_lynx:'',bancoffre_milan:'',bancoffre_beluga:'',bancoffre_espadon:'',bancoffre_grizzly:''};
 // Table detection signatures (field names that uniquely identify each table)
 const SIGS={
@@ -53,11 +53,12 @@ const SIGS={
   badges:t=>has(t,'badge')&&has(t,'statut')&&has(t,'categorie')&&has(t,'membre id'),
   commandes:t=>has(t,'article')&&has(t,'taille')&&has(t,'membre id'),
   finances:t=>has(t,'type')&&has(t,'montant')&&has(t,'categorie')&&has(t,'date')&&!has(t,'article'),
-  historique:t=>has(t,'membre id')&&has(t,'patrouille')&&has(t,'fonction')&&has(t,'annee scoute')&&!has(t,'promesse')
+  historique:t=>has(t,'membre id')&&has(t,'patrouille')&&has(t,'fonction')&&has(t,'annee scoute')&&!has(t,'promesse'),
+  config:t=>has(t,'nom')&&has(t,'type')&&has(t,'annee scoute')&&!has(t,'montant')&&!has(t,'membre id')
 };
 const MAT_HINTS={wood:'Local et Bois',tools:'outils',firstaid:'secours',food:'food',supplies:'intendance',bancoffre_loup:'bancoffre loup',bancoffre_lynx:'bancoffre lynx',bancoffre_milan:'bancoffre milan',bancoffre_beluga:'bancoffre beluga',bancoffre_espadon:'bancoffre espadon',bancoffre_grizzly:'bancoffre grizzly'};
 function has(t,n){return t._fn.includes(n)}
-function scoreBase(info){let s=0;for(const k of['members','presence','badges','commandes','finances'])if(info[k])s++;return s}
+function scoreBase(info){let s=0;for(const k of['members','presence','badges','commandes','finances','config'])if(info[k])s++;return s}
 const PATROUILLES=['Loup','Lynx','Milan','Beluga','Espadon','Grizzly'];
 const PAT_C_D={Loup:'#6366f1',Lynx:'#06b6d4',Milan:'#14b8a6',Beluga:'#22c55e',Espadon:'#eab308',Grizzly:'#f97316'};
 const PAT_C_L={Loup:'#2563a8',Lynx:'#1a7a6a',Milan:'#b84c1e',Beluga:'#5b3fa0',Espadon:'#9c6a1a',Grizzly:'#b83030'};
@@ -75,7 +76,7 @@ const ARTICLES=['Short','Chemise','T-shirt blanc','T-shirt navy','Ceinture','Bad
 const ARTICLE_PRICES={'Short':15,'Chemise':15,'T-shirt blanc':5,'T-shirt navy':5,'Ceinture':15,'Badge':1,'Prets / De notre mieux':5};
 
 // ═══════════ STATE ═══════════
-let S={theme:localStorage.getItem('scout_theme')||'dark',token:localStorage.getItem('scout_token')||'',year:localStorage.getItem('scout_year')||'',screen:'setup',loading:false,error:null,statusMsg:null,modal:null,members:[],att:{},reasons:{},meetDate:nxSat(),attFilter:'all',attSearch:'',submitting:false,progress:0,savedStats:{},history:{},loadingHist:false,formFilter:'Tous',formSearch:'',selMember:null,activePillar:null,progressRecs:[],loadingProg:false,savingStep:null,openSec:{},matData:{},matLoading:false,matOpen:{},orders:[],ordersLoading:false,oMember:null,oArticle:'',oTaille:'',oQty:1,oBadge:'',oNotes:'',oPrix:'',oSaving:false,finTx:[],finLoading:false,finSaving:false,dashLoading:false,dashData:null,mhMember:null,mhData:null,mhLoading:false};
+let S={theme:localStorage.getItem('scout_theme')||'dark',token:localStorage.getItem('scout_token')||'',year:localStorage.getItem('scout_year')||'',screen:'setup',loading:false,error:null,statusMsg:null,modal:null,members:[],att:{},reasons:{},meetDate:nxSat(),attFilter:'all',attSearch:'',submitting:false,progress:0,savedStats:{},history:{},loadingHist:false,formFilter:'Tous',formSearch:'',selMember:null,activePillar:null,progressRecs:[],loadingProg:false,savingStep:null,openSec:{},matData:{},matLoading:false,matOpen:{},orders:[],ordersLoading:false,oMember:null,oArticle:'',oTaille:'',oQty:1,oBadge:'',oNotes:'',oPrix:'',oSaving:false,finTx:[],finLoading:false,finSaving:false,dashLoading:false,dashData:null,mhMember:null,mhData:null,mhLoading:false,cfgData:[],cfgLoading:false};
 function set(p){Object.assign(S,p);render()}
 function nxSat(){const d=new Date(),x=(6-d.getDay()+7)%7||0;d.setDate(d.getDate()+x);return d.toISOString().split('T')[0]}
 function fmtD(s){if(!s)return'—';const m=['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'],p=s.split('-');return parseInt(p[2])+' '+m[parseInt(p[1])-1]+' '+p[0]}
@@ -142,6 +143,7 @@ async function connect(){
     TBL.commandes=bestMembers.tables.commandes||'';
     TBL.finances=bestMembers.tables.finances||'';
     TBL.historique=bestMembers.tables.historique||'';
+    TBL.config=bestMembers.tables.config||'tblK4gxSX8rqrAEOJ';
     
     if(bestMat&&bestMatCount>2){
       BASE2=bestMat.baseId;
@@ -165,7 +167,7 @@ async function connect(){
   }
 }
 function restoreConfig(){
-  try{const c=JSON.parse(localStorage.getItem('scout_cfg2'));if(c&&c.BASE1&&c.TBL?.members){BASE1=c.BASE1;BASE2=c.BASE2;Object.assign(TBL,c.TBL);Object.assign(MAT_TBL,c.MAT_TBL||{});return true}}catch(e){}return false;
+  try{const c=JSON.parse(localStorage.getItem('scout_cfg2'));if(c&&c.BASE1&&c.TBL?.members){BASE1=c.BASE1;BASE2=c.BASE2;Object.assign(TBL,c.TBL);Object.assign(MAT_TBL,c.MAT_TBL||{});if(!TBL.config)TBL.config='tblK4gxSX8rqrAEOJ';return true}}catch(e){}return false;
 }
 
 // ═══════════ DATA LOADING ═══════════
@@ -245,6 +247,29 @@ async function saveYearSnapshot(){
   for(let i=0;i<am.length;i+=bs){const chunk=am.slice(i,i+bs);
     const records=chunk.map(m=>({fields:{'Membre ID':m.id,'Prenom Nom':`${m.prenom} ${m.nom}`,'Patrouille':m.pat,'Fonction':m.fn||'Scout','Annee Scoute':S.year}}));
     await api('POST',BASE1+'/'+TBL.historique,{records,typecast:true})}
+}
+
+async function loadConfig(){if(!TBL.config)return;set({cfgLoading:true});try{const recs=await getAll(BASE1,TBL.config,{filter:`{Annee Scoute}="${S.year}"`});set({cfgData:recs.map(r=>({rid:r.id,nom:r.fields['Nom']||'',type:sv(r.fields['Type']),notes:r.fields['Notes']||''})),cfgLoading:false})}catch(e){set({cfgLoading:false})}}
+
+async function addNewMember(prenom,nom,pat){
+  if(!prenom||!nom)return;
+  const maxId=S.members.reduce((mx,m)=>Math.max(mx,m.id||0),0);
+  const newId=maxId+1;
+  try{await api('POST',BASE1+'/'+TBL.members,{records:[{fields:{'ID':newId,'Prenom':prenom,'Nom':nom,'Patrouille':pat||'Loup','Annee Scoute':S.year}}],typecast:true});
+    set({modal:null});await loadMembers()}catch(e){console.error(e)}
+}
+async function addCfgEntry(nom,type){
+  if(!nom){alert('Veuillez entrer un nom');return}
+  if(!TBL.config){alert('Table config non détectée');return}
+  try{await api('POST',BASE1+'/'+TBL.config,{records:[{fields:{'Nom':nom,'Type':type,'Annee Scoute':S.year}}],typecast:true});await loadConfig();showTroupeConfig()}catch(e){alert('Erreur: '+e.message)}
+}
+async function removeCfgEntry(rid){
+  if(!TBL.config){alert('Table config non détectée');return}
+  try{await api('DELETE',BASE1+'/'+TBL.config+'?records[]='+rid);await loadConfig();showTroupeConfig()}catch(e){alert('Erreur: '+e.message)}
+}
+async function renameCfgEntry(rid,newName){
+  if(!TBL.config||!newName)return;
+  try{await api('PATCH',BASE1+'/'+TBL.config,{records:[{id:rid,fields:{'Nom':newName}}],typecast:true});loadConfig()}catch(e){console.error(e)}
 }
 
 // ═══════════ ACTIONS ═══════════
@@ -375,14 +400,31 @@ ${yrs.length===0?'<div class="empty-state"><span class="e-icon">📅</span>Pas e
 </div>`}
 
 // ═══ SETUP TROUPE ═══
-function rSetupTr(){const am=actM(),ps=getPats(),g={};am.forEach(m=>{const p=m.pat||'—';if(!g[p])g[p]=[];g[p].push(m)});return`<div class="fade-in">${mH('Setup '+S.year,'Patrouilles & rôles','home')}<div class="fin-card"><h3>📋 Vue d'ensemble</h3><div class="stat-row">${ps.map(p=>`<div class="stat-box"><div class="num" style="color:${patC(p)};font-size:16px">${(g[p]||[]).length}</div><div class="lbl">${PAT_ICONS[p]||''} ${E(p)}</div></div>`).join('')}</div></div>${ps.sort((a,b)=>{const ai=PATROUILLES.indexOf(a),bi=PATROUILLES.indexOf(b);return(ai===-1?99:ai)-(bi===-1?99:bi)}).map(pat=>{const ms=g[pat]||[],cp=ms.find(m=>m.fn==='CP'),sp=ms.find(m=>m.fn==='SP');return`<div class="fin-card"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="width:14px;height:14px;border-radius:50%;background:${patC(pat)}"></div><div style="font-family:var(--font-display);font-size:16px;font-weight:500;flex:1">${PAT_ICONS[pat]||''} ${E(pat)}</div><span style="font-size:11px;color:var(--text3);background:var(--bg3);padding:2px 10px;border-radius:10px;font-weight:600">${ms.length}</span></div><div style="display:flex;gap:8px;margin-bottom:10px"><div style="flex:1;padding:8px 12px;border-radius:var(--radius);background:var(--purple-bg);border:1px solid rgba(192,132,252,.15)"><div style="font-size:10px;color:var(--purple);font-weight:600;text-transform:uppercase">CP</div><div style="font-size:13px;font-weight:500;margin-top:2px">${cp?E(cp.prenom)+' '+E(cp.nom):'<span style="color:var(--text3)">—</span>'}</div></div><div style="flex:1;padding:8px 12px;border-radius:var(--radius);background:var(--info-bg);border:1px solid rgba(96,165,250,.15)"><div style="font-size:10px;color:var(--info);font-weight:600;text-transform:uppercase">SP</div><div style="font-size:13px;font-weight:500;margin-top:2px">${sp?E(sp.prenom)+' '+E(sp.nom):'<span style="color:var(--text3)">—</span>'}</div></div></div>${ms.map(m=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--border-light);font-size:13px"><div class="avatar" style="width:28px;height:28px;font-size:10px;background:${patC(pat)}">${(m.prenom[0]||'')+(m.nom[0]||'')}</div><span style="flex:1;font-weight:500">${E(m.prenom)} ${E(m.nom)}</span>${m.fn?`<span class="pill" style="background:${m.fn==='CP'?'var(--purple-bg)':'var(--info-bg)'};color:${m.fn==='CP'?'var(--purple)':'var(--info)'}">${E(m.fn)}</span>`:''}<select style="padding:4px 8px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--text);font-family:var(--font)" onchange="setRole('${m.rid}',this.value)"><option value="" ${!m.fn?'selected':''}>Scout</option><option value="CP" ${m.fn==='CP'?'selected':''}>CP</option><option value="SP" ${m.fn==='SP'?'selected':''}>SP</option></select><select style="padding:4px 8px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--text);font-family:var(--font)" onchange="setPat('${m.rid}',this.value)">${PATROUILLES.map(p=>`<option value="${E(p)}" ${m.pat===p?'selected':''}>${PAT_ICONS[p]} ${E(p)}</option>`).join('')}</select></div>`).join('')}<button class="btn btn-sm btn-outline" style="width:100%;justify-content:center;margin-top:8px" onclick="showTransfer('${E(pat)}')">+ Transférer</button></div>`}).join('')}<div class="fin-card"><h3>🔄 Activer pour ${E(S.year)}</h3><p style="font-size:12px;color:var(--text2);margin-bottom:10px">Scouts d'une autre année ou sans année assignée.</p>${S.members.filter(m=>!m.year||m.year!==S.year).length===0?'<div style="text-align:center;color:var(--text3);font-size:13px;padding:8px">Tous actifs ✓</div>':''}${S.members.filter(m=>!m.year||m.year!==S.year).map(m=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--border-light);font-size:13px"><span style="flex:1;font-weight:500">${E(m.prenom)} ${E(m.nom)}</span><span style="font-size:11px;color:var(--text3)">${E(m.pat)}${m.year?' · '+E(m.year):''}</span><button class="btn btn-sm" style="background:var(--accent-bg);color:var(--accent);padding:4px 12px" onclick="activate('${m.rid}')">Activer</button></div>`).join('')}</div></div>`}
+function rSetupTr(){const am=actM(),ps=getPats(),g={};am.forEach(m=>{const p=m.pat||'—';if(!g[p])g[p]=[];g[p].push(m)});
+const maitrise=S.cfgData.filter(c=>c.type==='Chef'||c.type==='Assistant'||c.type==='Aumonier');
+const cfgPats=S.cfgData.filter(c=>c.type==='Patrouille');
+return`<div class="fade-in">${mH('Setup '+S.year,'Patrouilles & rôles','home')}
+<div style="display:flex;gap:8px;margin-bottom:16px"><button class="btn btn-sm btn-outline" style="flex:1;justify-content:center" onclick="showAddMember()">👤 + Nouveau scout</button><button class="btn btn-sm btn-outline" style="flex:1;justify-content:center" onclick="showTroupeConfig()">⚜ Troupe</button></div>
+${maitrise.length?`<div class="fin-card"><h3>👑 Maîtrise</h3>${maitrise.map(m=>{const tC=m.type==='Chef'?'var(--danger)':m.type==='Aumonier'?'var(--purple)':'var(--warn)';return`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-light)"><span class="pill" style="background:${tC}15;color:${tC}">${E(m.type)}</span><span style="flex:1;font-weight:500;font-size:14px">${E(m.nom)}</span></div>`}).join('')}</div>`:''}
+<div class="fin-card"><h3>📋 Vue d'ensemble</h3><div class="stat-row">${ps.map(p=>`<div class="stat-box"><div class="num" style="color:${patC(p)};font-size:16px">${(g[p]||[]).length}</div><div class="lbl">${PAT_ICONS[p]||''} ${E(p)}</div></div>`).join('')}</div></div>
+${ps.sort((a,b)=>{const ai=PATROUILLES.indexOf(a),bi=PATROUILLES.indexOf(b);return(ai===-1?99:ai)-(bi===-1?99:bi)}).map(pat=>{const ms=g[pat]||[],cp=ms.find(m=>m.fn==='CP'),sp=ms.find(m=>m.fn==='SP');const allPats=[...new Set([...PATROUILLES,...cfgPats.map(c=>c.nom)])];
+return`<div class="fin-card"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="width:14px;height:14px;border-radius:50%;background:${patC(pat)}"></div><div style="font-family:var(--font-display);font-size:16px;font-weight:500;flex:1">${PAT_ICONS[pat]||'⚜'} ${E(pat)}</div><span style="font-size:11px;color:var(--text3);background:var(--bg3);padding:2px 10px;border-radius:10px;font-weight:600">${ms.length}</span></div>
+<div style="display:flex;gap:8px;margin-bottom:10px"><div style="flex:1;padding:8px 12px;border-radius:var(--radius);background:var(--purple-bg);border:1px solid rgba(192,132,252,.15)"><div style="font-size:10px;color:var(--purple);font-weight:600;text-transform:uppercase">CP</div><div style="font-size:13px;font-weight:500;margin-top:2px">${cp?E(cp.prenom)+' '+E(cp.nom):'<span style="color:var(--text3)">—</span>'}</div></div><div style="flex:1;padding:8px 12px;border-radius:var(--radius);background:var(--info-bg);border:1px solid rgba(96,165,250,.15)"><div style="font-size:10px;color:var(--info);font-weight:600;text-transform:uppercase">SP</div><div style="font-size:13px;font-weight:500;margin-top:2px">${sp?E(sp.prenom)+' '+E(sp.nom):'<span style="color:var(--text3)">—</span>'}</div></div></div>
+${ms.map(m=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--border-light);font-size:13px"><div class="avatar" style="width:28px;height:28px;font-size:10px;background:${patC(pat)}">${(m.prenom[0]||'')+(m.nom[0]||'')}</div><span style="flex:1;font-weight:500">${E(m.prenom)} ${E(m.nom)}</span>${m.fn?`<span class="pill" style="background:${m.fn==='CP'?'var(--purple-bg)':'var(--info-bg)'};color:${m.fn==='CP'?'var(--purple)':'var(--info)'}">${E(m.fn)}</span>`:''}
+<select style="padding:4px 8px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--text);font-family:var(--font)" onchange="setRole('${m.rid}',this.value)"><option value="" ${!m.fn?'selected':''}>Scout</option><option value="CP" ${m.fn==='CP'?'selected':''}>CP</option><option value="SP" ${m.fn==='SP'?'selected':''}>SP</option></select>
+<select style="padding:4px 8px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--text);font-family:var(--font)" onchange="setPat('${m.rid}',this.value)">${allPats.map(p=>`<option value="${E(p)}" ${m.pat===p?'selected':''}>${PAT_ICONS[p]||'⚜'} ${E(p)}</option>`).join('')}</select></div>`).join('')}
+<button class="btn btn-sm btn-outline" style="width:100%;justify-content:center;margin-top:8px" onclick="showTransfer('${E(pat)}')">+ Transférer</button></div>`}).join('')}
+<div class="fin-card"><h3>🔄 Activer pour ${E(S.year)}</h3><p style="font-size:12px;color:var(--text2);margin-bottom:10px">Scouts d'une autre année ou sans année assignée.</p>
+${S.members.filter(m=>!m.year||m.year!==S.year).length===0?'<div style="text-align:center;color:var(--text3);font-size:13px;padding:8px">Tous actifs ✓</div>':''}
+${S.members.filter(m=>!m.year||m.year!==S.year).map(m=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--border-light);font-size:13px"><span style="flex:1;font-weight:500">${E(m.prenom)} ${E(m.nom)}</span><span style="font-size:11px;color:var(--text3)">${E(m.pat)}${m.year?' · '+E(m.year):''}</span><button class="btn btn-sm" style="background:var(--accent-bg);color:var(--accent);padding:4px 12px" onclick="activate('${m.rid}')">Activer</button></div>`).join('')}
+</div></div>`}
 
 // ═══════════ GLOBAL HANDLERS ═══════════
-window.doConnect=()=>{S.token=document.getElementById('tok')?.value?.trim()||S.token;if(!S.token){set({error:'Veuillez coller votre token'});return}connect()};
+window.doConnect=()=>{S.token=document.getElementById('tok')?.value?.trim()||S.token;if(!S.token){set({error:'Veuillez coller votre token'});return}localStorage.removeItem('scout_cfg2');connect()};
 window.doYear=()=>{const s=document.getElementById('yearsel');if(s)S.year=s.value;if(!S.year)return;localStorage.setItem('scout_year',S.year);set({screen:'home'})};
 window.doLogout=()=>{localStorage.removeItem('scout_token');localStorage.removeItem('scout_year');localStorage.removeItem('scout_cfg2');S.token='';S.year='';S.members=[];BASE1='';BASE2='';set({screen:'setup',error:null})};
 window.toggleTheme=()=>{S.theme=S.theme==='dark'?'light':'dark';localStorage.setItem('scout_theme',S.theme);render()};
-window.goTo=(sc)=>{set({screen:sc,error:null,modal:null});if(sc==='material'&&Object.keys(S.matData).length===0)loadMaterial();if(sc==='orders'||sc==='member_orders')loadOrders();if(sc==='finance'){loadFinances();loadOrders()}if(sc==='dashboard')loadDashboard();if(sc==='formation')set({selMember:null,activePillar:null,progressRecs:[],openSec:{}});if(sc==='attendance'){const att={};actM().forEach(m=>att[m.id]=true);set({att,reasons:{},meetDate:nxSat(),attSearch:'',attFilter:'all'})}};
+window.goTo=(sc)=>{set({screen:sc,error:null,modal:null});if(sc==='material'&&Object.keys(S.matData).length===0)loadMaterial();if(sc==='orders'||sc==='member_orders')loadOrders();if(sc==='finance'){loadFinances();loadOrders()}if(sc==='dashboard')loadDashboard();if(sc==='troupe_setup')loadConfig();if(sc==='formation')set({selMember:null,activePillar:null,progressRecs:[],openSec:{}});if(sc==='attendance'){const att={};actM().forEach(m=>att[m.id]=true);set({att,reasons:{},meetDate:nxSat(),attSearch:'',attFilter:'all'})}};
 window.viewMH=(id)=>{const m=S.members.find(x=>x.id===id);if(m){set({mhMember:m,screen:'member_history'});loadMemberHistory(m.id)}};
 window.doSnapshot=async()=>{if(!confirm('Sauvegarder un snapshot de toutes les patrouilles/rôles pour '+S.year+'?'))return;try{set({statusMsg:'Sauvegarde...'});await saveYearSnapshot();set({statusMsg:null});alert('Snapshot sauvegardé ✓')}catch(e){set({statusMsg:null});alert('Erreur: '+e.message)}};
 window.togAtt=(id)=>{S.att[id]=!S.att[id];render()};window.markAll=(v)=>{filtM('attFilter','attSearch').forEach(m=>S.att[m.id]=v);render()};
@@ -420,6 +462,17 @@ window.showCart=()=>{
 `});
 };
 window.showTransfer=(pat)=>{const inact=S.members.filter(m=>!m.year||m.year!==S.year);set({modal:`<h3>Transférer vers ${E(pat)}</h3>${inact.length===0?'<p style="color:var(--text3);font-size:13px">Aucun scout inactif.</p>':''}${inact.map(m=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border-light)"><span style="flex:1;font-size:13px;font-weight:500">${E(m.prenom)} ${E(m.nom)}</span><button class="btn btn-sm" style="background:var(--accent-bg);color:var(--accent);padding:4px 12px" onclick="transfer('${m.rid}','${E(pat)}')">→ ${E(pat)}</button></div>`).join('')}`})};
+window.showAddMember=()=>{const cfgPats=S.cfgData.filter(c=>c.type==='Patrouille');const allPats=[...new Set([...PATROUILLES,...cfgPats.map(c=>c.nom)])];set({modal:`<h3>👤 Nouveau scout</h3><div class="form-group"><label>Prénom</label><input id="nm-prenom" placeholder="Prénom"></div><div class="form-group"><label>Nom</label><input id="nm-nom" placeholder="Nom de famille"></div><div class="form-group"><label>Patrouille</label><select id="nm-pat">${allPats.map(p=>`<option value="${E(p)}">${PAT_ICONS[p]||'⚜'} ${E(p)}</option>`).join('')}</select></div><button class="btn btn-primary" style="width:100%;justify-content:center" onclick="addNewMember(document.getElementById('nm-prenom').value,document.getElementById('nm-nom').value,document.getElementById('nm-pat').value)">Ajouter le scout</button>`})};
+window.showTroupeConfig=()=>{const maitrise=S.cfgData.filter(c=>c.type==='Chef'||c.type==='Assistant'||c.type==='Aumonier');const pats=S.cfgData.filter(c=>c.type==='Patrouille');
+set({modal:`<h3>⚜ Configuration de la troupe</h3>
+<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;margin-bottom:8px">👑 Maîtrise</div>
+${maitrise.map(m=>{const tC=m.type==='Chef'?'var(--danger)':m.type==='Aumonier'?'var(--purple)':'var(--warn)';return`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-light)"><span class="pill" style="background:${tC}15;color:${tC}">${E(m.type)}</span><span style="flex:1;font-weight:500;font-size:13px">${E(m.nom)}</span><span style="color:var(--danger);cursor:pointer;font-size:14px" onclick="removeCfgEntry('${m.rid}')">×</span></div>`}).join('')}
+<div style="display:flex;gap:6px;margin-top:8px"><select id="cfg-mtype" style="padding:6px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--text);font-family:var(--font)"><option value="Chef">Chef</option><option value="Assistant">Assistant</option><option value="Aumonier">Aumônier</option></select><input id="cfg-mname" placeholder="Nom complet" style="flex:1;padding:6px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--text);font-family:var(--font)"><button class="btn btn-sm" style="background:var(--accent-bg);color:var(--accent)" onclick="const n=document.getElementById('cfg-mname').value,t=document.getElementById('cfg-mtype').value;addCfgEntry(n,t)">+</button></div></div>
+<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;margin-bottom:8px">🏕 Patrouilles</div>
+${pats.map(p=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-light)"><span style="font-size:16px">${PAT_ICONS[p.nom]||'⚜'}</span><span style="flex:1;font-weight:500;font-size:13px">${E(p.nom)}</span><span style="color:var(--danger);cursor:pointer;font-size:14px" onclick="if(confirm('Supprimer la patrouille ${E(p.nom)}?'))removeCfgEntry('${p.rid}')">×</span></div>`).join('')}
+<div style="display:flex;gap:6px;margin-top:8px"><input id="cfg-pname" placeholder="Nom de la patrouille" style="flex:1;padding:6px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--text);font-family:var(--font)"><button class="btn btn-sm" style="background:var(--accent-bg);color:var(--accent)" onclick="const n=document.getElementById('cfg-pname').value;addCfgEntry(n,'Patrouille')">+</button></div></div>
+`})};
+window.addNewMember=addNewMember;window.addCfgEntry=addCfgEntry;window.removeCfgEntry=removeCfgEntry;
 
 // ═══════════ INIT ═══════════
 (async function(){
