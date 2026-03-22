@@ -249,27 +249,49 @@ async function saveYearSnapshot(){
     await api('POST',BASE1+'/'+TBL.historique,{records,typecast:true})}
 }
 
-async function loadConfig(){if(!TBL.config)return;set({cfgLoading:true});try{const recs=await getAll(BASE1,TBL.config,{filter:`{Annee Scoute}="${S.year}"`});set({cfgData:recs.map(r=>({rid:r.id,nom:r.fields['Nom']||'',type:sv(r.fields['Type']),notes:r.fields['Notes']||''})),cfgLoading:false})}catch(e){set({cfgLoading:false})}}
+// Config uses localStorage (always works) + tries Airtable sync as bonus
+function getCfgKey(){return 'scout_cfg_'+S.year}
+function loadConfigLocal(){try{const d=JSON.parse(localStorage.getItem(getCfgKey())||'[]');set({cfgData:d,cfgLoading:false})}catch(e){set({cfgData:[],cfgLoading:false})}}
+function saveCfgLocal(){localStorage.setItem(getCfgKey(),JSON.stringify(S.cfgData))}
+async function loadConfig(){
+  loadConfigLocal();
+  if(!TBL.config)return;
+  try{const recs=await getAll(BASE1,TBL.config,{filter:`{Annee Scoute}="${S.year}"`});
+    const data=recs.map(r=>({rid:r.id,nom:r.fields['Nom']||'',type:sv(r.fields['Type']),notes:r.fields['Notes']||''}));
+    if(data.length>0||S.cfgData.length===0){set({cfgData:data});saveCfgLocal()}
+  }catch(e){/* Airtable failed, use localStorage data */}
+}
+function addCfgLocal(nom,type){
+  const id='local_'+Date.now();
+  S.cfgData=[...S.cfgData,{rid:id,nom,type,notes:''}];
+  saveCfgLocal();render();
+}
+function rmCfgLocal(rid){
+  S.cfgData=S.cfgData.filter(c=>c.rid!==rid);
+  saveCfgLocal();render();
+}
+async function addCfgEntry(nom,type){
+  if(!nom){alert('Veuillez entrer un nom');return}
+  // Add locally first (instant)
+  addCfgLocal(nom,type);
+  showTroupeConfig();
+  // Try Airtable sync in background
+  if(TBL.config){try{await api('POST',BASE1+'/'+TBL.config,{records:[{fields:{'Nom':nom,'Type':type,'Annee Scoute':S.year}}],typecast:true});await loadConfig();showTroupeConfig()}catch(e){/* Airtable failed, localStorage is still good */}}
+}
+async function removeCfgEntry(rid){
+  // Remove locally first
+  rmCfgLocal(rid);
+  showTroupeConfig();
+  // Try Airtable sync
+  if(TBL.config&&!rid.startsWith('local_')){try{await api('DELETE',BASE1+'/'+TBL.config+'?records[]='+rid);await loadConfig();showTroupeConfig()}catch(e){}}
+}
 
 async function addNewMember(prenom,nom,pat){
   if(!prenom||!nom)return;
   const maxId=S.members.reduce((mx,m)=>Math.max(mx,m.id||0),0);
   const newId=maxId+1;
   try{await api('POST',BASE1+'/'+TBL.members,{records:[{fields:{'ID':newId,'Prenom':prenom,'Nom':nom,'Patrouille':pat||'Loup','Annee Scoute':S.year}}],typecast:true});
-    set({modal:null});await loadMembers()}catch(e){console.error(e)}
-}
-async function addCfgEntry(nom,type){
-  if(!nom){alert('Veuillez entrer un nom');return}
-  if(!TBL.config){alert('Table config non détectée');return}
-  try{await api('POST',BASE1+'/'+TBL.config,{records:[{fields:{'Nom':nom,'Type':type,'Annee Scoute':S.year}}],typecast:true});await loadConfig();showTroupeConfig()}catch(e){alert('Erreur: '+e.message)}
-}
-async function removeCfgEntry(rid){
-  if(!TBL.config){alert('Table config non détectée');return}
-  try{await api('DELETE',BASE1+'/'+TBL.config+'?records[]='+rid);await loadConfig();showTroupeConfig()}catch(e){alert('Erreur: '+e.message)}
-}
-async function renameCfgEntry(rid,newName){
-  if(!TBL.config||!newName)return;
-  try{await api('PATCH',BASE1+'/'+TBL.config,{records:[{id:rid,fields:{'Nom':newName}}],typecast:true});loadConfig()}catch(e){console.error(e)}
+    set({modal:null});await loadMembers()}catch(e){alert('Erreur: '+e.message)}
 }
 
 // ═══════════ ACTIONS ═══════════
