@@ -55,7 +55,7 @@ const SIGS={
   finances:t=>has(t,'type')&&has(t,'montant')&&has(t,'categorie')&&has(t,'date')&&!has(t,'article'),
   historique:t=>has(t,'membre id')&&has(t,'patrouille')&&has(t,'fonction')&&has(t,'annee scoute')&&!has(t,'promesse')
 };
-const MAT_HINTS={wood:'local et bois',tools:'outils',firstaid:'secours',food:'food',supplies:'intendance',bancoffre_loup:'bancoffre loup',bancoffre_lynx:'bancoffre lynx',bancoffre_milan:'bancoffre milan',bancoffre_beluga:'bancoffre beluga',bancoffre_espadon:'bancoffre espadon',bancoffre_grizzly:'bancoffre grizzly'};
+const MAT_HINTS={wood:'Local et Bois',tools:'outils',firstaid:'secours',food:'food',supplies:'intendance',bancoffre_loup:'bancoffre loup',bancoffre_lynx:'bancoffre lynx',bancoffre_milan:'bancoffre milan',bancoffre_beluga:'bancoffre beluga',bancoffre_espadon:'bancoffre espadon',bancoffre_grizzly:'bancoffre grizzly'};
 function has(t,n){return t._fn.includes(n)}
 function scoreBase(info){let s=0;for(const k of['members','presence','badges','commandes','finances'])if(info[k])s++;return s}
 const PATROUILLES=['Loup','Lynx','Milan','Beluga','Espadon','Grizzly'];
